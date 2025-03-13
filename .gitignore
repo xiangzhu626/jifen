@@ -1,0 +1,35 @@
+# 依赖
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+package-lock.json
+
+# 构建输出
+/client/build
+/client/dist
+
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 数据库
+*.sqlite
+*.db
+
+# 日志
+logs/
+*.log
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器配置
+.idea/
+.vscode/
+*.swp
+*.swo 
