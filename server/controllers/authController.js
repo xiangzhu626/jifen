@@ -1,14 +1,12 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getOne } = require('../utils/db');
+const { JWT_SECRET } = require('../middleware/auth');
 
-// JWT密钥
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
-
-// 生成JWT token
-const generateToken = (admin) => {
+// 生成JWT令牌
+const generateToken = (user) => {
   return jwt.sign(
-    { id: admin.id, username: admin.username },
+    { id: user.id, username: user.username },
     JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -27,11 +25,11 @@ const login = async (req, res) => {
       });
     }
     
-    // 查询管理员
-    const admin = await getOne('SELECT * FROM admins WHERE username = ?', [username]);
+    // 查询用户
+    const user = await getOne('SELECT * FROM admins WHERE username = ?', [username]);
     
-    // 如果管理员不存在
-    if (!admin) {
+    // 用户不存在
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: '用户名或密码错误'
@@ -39,7 +37,7 @@ const login = async (req, res) => {
     }
     
     // 验证密码
-    const isMatch = await bcrypt.compare(password, admin.password);
+    const isMatch = await bcrypt.compare(password, user.password);
     
     if (!isMatch) {
       return res.status(401).json({
@@ -48,22 +46,22 @@ const login = async (req, res) => {
       });
     }
     
-    // 生成token
-    const token = generateToken(admin);
+    // 生成令牌
+    const token = generateToken(user);
     
-    // 返回结果
+    // 返回用户信息和令牌
     res.json({
       success: true,
       data: {
         token,
-        admin: {
-          id: admin.id,
-          username: admin.username
+        user: {
+          id: user.id,
+          username: user.username
         }
       }
     });
   } catch (error) {
-    console.error('登录时出错:', error);
+    console.error('登录错误:', error);
     res.status(500).json({
       success: false,
       message: '服务器错误'
@@ -76,7 +74,10 @@ const checkAuth = (req, res) => {
   res.json({
     success: true,
     data: {
-      admin: req.user
+      user: {
+        id: req.user.id,
+        username: req.user.username
+      }
     }
   });
 };
