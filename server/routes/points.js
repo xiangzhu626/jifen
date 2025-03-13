@@ -17,6 +17,9 @@ router.get('/ranking', getPointsRanking);
 // 通过星球ID查询会员积分 - 新增公开API
 router.get('/search', searchMemberPointsByPlanetId);
 
+// 获取积分交易记录 - 公开路由
+router.get('/transactions/:memberId', getPointsTransactions);
+
 // 以下路由需要认证
 router.use(authenticate);
 
@@ -28,8 +31,5 @@ router.post('/add', addPoints);
 
 // 扣减积分
 router.post('/deduct', deductPoints);
-
-// 获取积分交易记录
-router.get('/transactions/:memberId', getPointsTransactions);
 
 module.exports = router; 

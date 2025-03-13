@@ -182,60 +182,169 @@ const deductPoints = async (req, res) => {
   }
 };
 
-// 获取积分交易记录
-const getPointsTransactions = async (req, res) => {
+// 获取所有交易记录（支持分页和筛选）
+const getAllPointsTransactions = async (req, res) => {
   try {
-    const { memberId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
-    
-    if (!memberId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: '会员ID不能为空' 
-      });
-    }
-    
-    // 检查会员是否存在
-    const member = await getOne('SELECT * FROM members WHERE id = ?', [memberId]);
-    
-    if (!member) {
-      return res.status(404).json({ 
-        success: false, 
-        message: '会员不存在' 
-      });
-    }
-    
-    // 计算分页
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
     
-    // 获取交易记录总数
-    const countResult = await getOne(
-      'SELECT COUNT(*) as total FROM points_transactions WHERE member_id = ?',
-      [memberId]
-    );
+    let query = `
+      SELECT pt.*, m.nickname as member_nickname
+      FROM points_transactions pt
+      LEFT JOIN members m ON pt.member_id = m.id
+    `;
     
-    // 获取交易记录
-    const transactions = await getAll(
-      'SELECT * FROM points_transactions WHERE member_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [memberId, parseInt(limit), offset]
-    );
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM points_transactions
+    `;
     
-    res.json({
+    const queryParams = [];
+    let whereClause = '';
+    
+    // 添加日期筛选
+    if (req.query.startDate && req.query.endDate) {
+      whereClause = ' WHERE pt.created_at BETWEEN ? AND ?';
+      const startDate = req.query.startDate + ' 00:00:00';
+      const endDate = req.query.endDate + ' 23:59:59';
+      queryParams.push(startDate, endDate);
+    }
+    
+    query += whereClause;
+    countQuery += whereClause;
+    
+    // 添加排序和分页
+    query += ' ORDER BY pt.created_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(limit, offset);
+    
+    // 执行查询
+    const transactions = await runQuery(query, queryParams);
+    const countResult = await runQuery(countQuery, queryParams.slice(0, queryParams.length - 2));
+    
+    // 安全地获取总数
+    let total = 0;
+    if (countResult && countResult.length > 0 && countResult[0].total !== undefined) {
+      total = countResult[0].total;
+    } else {
+      // 如果无法获取总数，则使用当前获取的交易记录数量作为备选
+      console.log('无法获取总记录数，使用当前记录数作为备选');
+      total = transactions.length;
+    }
+    
+    return res.json({
       success: true,
       data: {
         transactions,
         pagination: {
-          total: countResult.total,
-          page: parseInt(page),
-          limit: parseInt(limit)
+          total,
+          page,
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('获取所有积分交易记录时出错:', error);
+    return res.status(500).json({
+      success: false,
+      message: '获取积分交易记录失败',
+      error: error.message
+    });
+  }
+};
+
+// 获取会员积分交易记录
+const getPointsTransactions = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    
+    // 如果memberId是'all'，则获取所有交易记录
+    if (memberId === 'all') {
+      return getAllPointsTransactions(req, res);
+    }
+    
+    // 验证会员ID
+    if (!memberId) {
+      return res.status(400).json({
+        success: false,
+        message: '会员ID不能为空'
+      });
+    }
+    
+    // 检查会员是否存在
+    try {
+      const member = await getOne('SELECT * FROM members WHERE id = ?', [memberId]);
+      if (!member) {
+        return res.status(404).json({
+          success: false,
+          message: '会员不存在'
+        });
+      }
+    } catch (error) {
+      console.error('检查会员是否存在时出错:', error);
+      // 继续执行，不要因为检查会员失败而中断整个请求
+    }
+    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    let query = `
+      SELECT * FROM points_transactions
+      WHERE member_id = ?
+    `;
+    
+    let countQuery = `
+      SELECT COUNT(*) as total FROM points_transactions
+      WHERE member_id = ?
+    `;
+    
+    const queryParams = [memberId];
+    
+    // 添加日期筛选
+    if (req.query.startDate && req.query.endDate) {
+      query += ' AND created_at BETWEEN ? AND ?';
+      countQuery += ' AND created_at BETWEEN ? AND ?';
+      const startDate = req.query.startDate + ' 00:00:00';
+      const endDate = req.query.endDate + ' 23:59:59';
+      queryParams.push(startDate, endDate);
+    }
+    
+    // 添加排序和分页
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(limit, offset);
+    
+    // 执行查询
+    const transactions = await runQuery(query, queryParams);
+    const countResult = await runQuery(countQuery, queryParams.slice(0, queryParams.length - 2));
+    
+    // 安全地获取总数
+    let total = 0;
+    if (countResult && countResult.length > 0 && countResult[0].total !== undefined) {
+      total = countResult[0].total;
+    } else {
+      // 如果无法获取总数，则使用当前获取的交易记录数量作为备选
+      console.log('无法获取总记录数，使用当前记录数作为备选');
+      total = transactions.length;
+    }
+    
+    return res.json({
+      success: true,
+      data: {
+        transactions,
+        pagination: {
+          total,
+          page,
+          limit
         }
       }
     });
   } catch (error) {
     console.error('获取积分交易记录时出错:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: '服务器错误' 
+    return res.status(500).json({
+      success: false,
+      message: '获取积分交易记录失败',
+      error: error.message
     });
   }
 };
@@ -348,5 +457,6 @@ module.exports = {
   deductPoints,
   getPointsTransactions,
   getPointsRanking,
-  searchMemberPointsByPlanetId
+  searchMemberPointsByPlanetId,
+  getAllPointsTransactions
 }; 

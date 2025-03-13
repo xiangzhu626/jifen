@@ -42,16 +42,30 @@ const getOne = (sql, params = []) => {
   });
 };
 
-// 执行更新操作
+// 执行SQL查询
 const runQuery = (sql, params = []) => {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
+    // 使用已经创建的db实例，而不是调用不存在的getDb函数
+    
+    // 添加日志，帮助调试
+    console.log('执行SQL查询:', sql);
+    console.log('查询参数:', params);
+    
+    db.all(sql, params, (err, rows) => {
       if (err) {
-        console.error('执行错误:', err);
+        console.error('SQL查询错误:', err);
         reject(err);
-      } else {
-        resolve({ lastID: this.lastID, changes: this.changes });
+        return;
       }
+      
+      // 确保返回的是数组
+      if (!Array.isArray(rows)) {
+        console.warn('SQL查询返回的不是数组，转换为数组');
+        rows = rows ? [rows] : [];
+      }
+      
+      console.log('SQL查询结果行数:', rows.length);
+      resolve(rows);
     });
   });
 };

@@ -38,19 +38,25 @@ const Points = () => {
   const [members, setMembers] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [initialized, setInitialized] = useState(false);
+  const [membersLoaded, setMembersLoaded] = useState(false);
 
   // 获取所有会员
   const fetchMembers = async () => {
     try {
+      setMembersLoaded(false);
       const response = await getAllMembers({ limit: 1000 });
       if (response.data && response.data.success) {
-        setMembers(response.data.data.members);
-        return response.data.data.members;
+        const fetchedMembers = response.data.data.members;
+        setMembers(fetchedMembers);
+        setMembersLoaded(true);
+        return fetchedMembers;
       }
+      setMembersLoaded(true);
       return [];
     } catch (error) {
       console.error('获取会员列表时出错:', error);
       message.error('获取会员列表失败');
+      setMembersLoaded(true);
       return [];
     }
   };
@@ -59,80 +65,54 @@ const Points = () => {
   const fetchTransactions = useCallback(async (page = 1, pageSize = 10, memberId = selectedMemberId, dates = dateRange) => {
     try {
       setLoading(true);
-      console.log('Fetching transactions with:', { memberId, dates, page, pageSize });
+      
+      // 确保会员数据已加载
+      let membersToUse = members;
+      if (!membersLoaded) {
+        membersToUse = await fetchMembers();
+      }
       
       if (!memberId) {
-        // 如果没有选择会员，获取所有会员的最新交易记录
-        const allMembers = members.length > 0 ? members : await fetchMembers();
-        if (allMembers.length === 0) {
-          setLoading(false);
-          setInitialized(true);
+        // 如果没有选择会员，获取所有会员的交易记录（分页）
+        const params = {
+          page,
+          limit: pageSize
+        };
+        
+        // 如果有日期范围，添加到查询参数
+        if (dates && dates.length === 2) {
+          params.startDate = dates[0].format('YYYY-MM-DD');
+          params.endDate = dates[1].format('YYYY-MM-DD');
+        }
+        
+        // 使用一个特殊的API端点获取所有交易记录
+        const response = await getPointsTransactions('all', params);
+        
+        if (response.data && response.data.success) {
+          // 处理交易记录，确保每条记录都有会员信息
+          const transactionsWithMember = response.data.data.transactions.map(tx => {
+            // 查找对应的会员
+            const member = membersToUse.find(m => m.id === tx.member_id);
+            return {
+              ...tx,
+              member_nickname: member ? member.nickname : '未知会员'
+            };
+          });
+          
+          setTransactions(transactionsWithMember);
+          setPagination({
+            current: page,
+            pageSize,
+            total: response.data.data.pagination.total
+          });
+        } else {
           setTransactions([]);
           setPagination({
             current: page,
             pageSize,
             total: 0
           });
-          return;
         }
-        
-        // 为了性能考虑，我们只获取前10个会员的数据
-        const limitedMembers = allMembers.slice(0, 10);
-        let allTransactions = [];
-        
-        const fetchPromises = limitedMembers.map(async (member) => {
-          try {
-            const memberResponse = await getPointsTransactions(member.id, {
-              page: 1,
-              limit: 20 // 每个会员获取最新的20条记录
-            });
-            
-            if (memberResponse.data && memberResponse.data.success) {
-              return memberResponse.data.data.transactions.map(tx => ({
-                ...tx,
-                member_nickname: member.nickname,
-                member_id: member.id
-              }));
-            }
-            return [];
-          } catch (error) {
-            console.error(`获取会员 ${member.id} 的交易记录时出错:`, error);
-            return [];
-          }
-        });
-        
-        // 并行获取所有会员的交易记录
-        const results = await Promise.all(fetchPromises);
-        results.forEach(memberTransactions => {
-          allTransactions.push(...memberTransactions);
-        });
-        
-        // 对所有交易记录按时间排序（最新的在前）
-        allTransactions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
-        // 应用日期范围筛选
-        if (dates && dates.length === 2) {
-          const startDate = dates[0].startOf('day').valueOf();
-          const endDate = dates[1].endOf('day').valueOf();
-          
-          allTransactions = allTransactions.filter(tx => {
-            const txDate = new Date(tx.created_at).valueOf();
-            return txDate >= startDate && txDate <= endDate;
-          });
-        }
-        
-        // 分页处理
-        const startIndex = (page - 1) * pageSize;
-        const endIndex = Math.min(startIndex + pageSize, allTransactions.length);
-        const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
-        
-        console.log('设置交易记录:', paginatedTransactions.length);
-        setTransactions(paginatedTransactions);
-        setPagination({
-          current: page,
-          pageSize,
-          total: allTransactions.length
-        });
       } else {
         // 如果选择了会员，则获取该会员的交易记录
         let params = {
@@ -146,12 +126,11 @@ const Points = () => {
           params.endDate = dates[1].format('YYYY-MM-DD');
         }
         
-        console.log('Fetching member transactions with params:', params);
         const response = await getPointsTransactions(memberId, params);
         
         if (response.data && response.data.success) {
           // 确保每条记录都有会员昵称
-          const member = members.find(m => m.id === memberId);
+          const member = membersToUse.find(m => m.id === memberId);
           const memberNickname = member ? member.nickname : '未知会员';
           
           const transactionsWithMember = response.data.data.transactions.map(tx => ({
@@ -160,7 +139,6 @@ const Points = () => {
             member_id: memberId
           }));
           
-          console.log('Member transactions received:', transactionsWithMember.length);
           setTransactions(transactionsWithMember);
           setPagination({
             current: page,
@@ -168,7 +146,6 @@ const Points = () => {
             total: response.data.data.pagination.total
           });
         } else {
-          console.log('No transactions found for member');
           setTransactions([]);
           setPagination({
             current: page,
@@ -190,14 +167,16 @@ const Points = () => {
       setLoading(false);
       setInitialized(true);
     }
-  }, [members, selectedMemberId, dateRange]);
+  }, [members, selectedMemberId, dateRange, membersLoaded]);
 
+  // 初始化：先获取会员列表，然后获取交易记录
   useEffect(() => {
-    // 初始化时获取会员列表和交易记录
     const init = async () => {
       try {
+        // 先获取会员列表
         await fetchMembers();
-        await fetchTransactions(1, 10, null, null);
+        // 会员列表加载完成后，获取交易记录
+        // 这里不需要再次调用fetchTransactions，因为下面的useEffect会在membersLoaded变为true时触发
       } catch (error) {
         console.error('初始化数据时出错:', error);
         setLoading(false);
@@ -208,16 +187,24 @@ const Points = () => {
     init();
   }, []);
 
+  // 当会员数据加载完成后，获取交易记录
+  useEffect(() => {
+    if (membersLoaded) {
+      fetchTransactions(1, pagination.pageSize);
+    }
+  }, [membersLoaded]);
+
   // 当选择的会员ID或日期范围变化时，重新获取交易记录
   useEffect(() => {
-    if (initialized) {
-      fetchTransactions(1, pagination.pageSize, selectedMemberId, dateRange);
+    if (initialized && membersLoaded) {
+      // 重置到第一页
+      fetchTransactions(1, pagination.pageSize);
     }
   }, [selectedMemberId, dateRange]);
 
   // 处理表格分页变化
   const handleTableChange = (newPagination) => {
-    fetchTransactions(newPagination.current, newPagination.pageSize, selectedMemberId, dateRange);
+    fetchTransactions(newPagination.current, newPagination.pageSize);
   };
 
   // 处理日期范围筛选
@@ -241,7 +228,7 @@ const Points = () => {
 
   // 处理刷新按钮
   const handleRefresh = () => {
-    fetchTransactions(1, pagination.pageSize, selectedMemberId, dateRange);
+    fetchTransactions(pagination.current, pagination.pageSize);
   };
 
   // 表格列
@@ -256,7 +243,16 @@ const Points = () => {
       title: '会员',
       dataIndex: 'member_nickname',
       key: 'member_nickname',
-      render: (text, record) => text || '未知会员'
+      render: (text, record) => {
+        // 如果会员数据已加载，尝试从members中查找
+        if (membersLoaded && record.member_id) {
+          const member = members.find(m => m.id === record.member_id);
+          if (member) {
+            return member.nickname;
+          }
+        }
+        return text || '未知会员';
+      }
     },
     {
       title: '交易类型',
@@ -303,6 +299,7 @@ const Points = () => {
               onChange={handleMemberChange}
               showSearch
               optionFilterProp="children"
+              loading={!membersLoaded}
             >
               {members.map(member => (
                 <Option key={member.id} value={member.id}>{member.nickname}</Option>
@@ -339,7 +336,7 @@ const Points = () => {
             dataSource={transactions}
             rowKey="id"
             pagination={pagination}
-            loading={loading}
+            loading={loading || !membersLoaded}
             onChange={handleTableChange}
             locale={{ emptyText: '暂无交易记录' }}
           />

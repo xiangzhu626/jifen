@@ -16,6 +16,7 @@ api.interceptors.request.use(
     const publicRoutes = [
       '/points/ranking',
       '/points/search',
+      '/points/transactions/',
       '/auth/login'
     ];
     
@@ -126,14 +127,9 @@ export const deductPoints = async (data) => {
   return await api.post('/points/deduct', data);
 };
 
-export const getPointsTransactions = async (memberId, params = {}) => {
-  // 确保memberId是一个有效的值
-  if (!memberId || typeof memberId === 'object') {
-    console.error('Invalid memberId:', memberId);
-    return Promise.reject(new Error('Invalid memberId'));
-  }
-  
-  return await api.get(`/points/transactions/${memberId}`, { params });
+// 修改为使用api实例，确保请求拦截器能正确处理
+export const getPointsTransactions = (memberId, params = {}) => {
+  return api.get(`/points/transactions/${memberId}`, { params });
 };
 
 export const getPointsRanking = async (limit = 10) => {
