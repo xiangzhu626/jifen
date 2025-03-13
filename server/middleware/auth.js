@@ -1,17 +1,32 @@
 const jwt = require('jsonwebtoken');
 const { getOne } = require('../utils/db');
 
-// JWT密钥
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+// JWT密钥，应该从环境变量中获取
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // 认证中间件
 const authenticate = async (req, res, next) => {
   try {
-    // 获取token
+    // 从请求头中获取token
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    
+    // 添加调试日志
+    console.log('认证中间件 - 请求路径:', req.path);
+    console.log('认证中间件 - 认证头:', authHeader);
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('认证中间件 - 未提供有效的认证头');
+      return res.status(401).json({ 
+        success: false, 
+        message: '未提供认证令牌' 
+      });
+    }
+    
+    // 提取token
+    const token = authHeader.split(' ')[1];
     
     if (!token) {
+      console.log('认证中间件 - 令牌为空');
       return res.status(401).json({ 
         success: false, 
         message: '未提供认证令牌' 
@@ -20,31 +35,27 @@ const authenticate = async (req, res, next) => {
     
     // 验证token
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('认证中间件 - 令牌解码成功:', decoded);
     
-    // 查询用户
-    const admin = await getOne('SELECT id, username FROM admins WHERE id = ?', [decoded.id]);
+    // 检查用户是否存在
+    const user = await getOne('SELECT * FROM admins WHERE id = ?', [decoded.id]);
     
-    if (!admin) {
+    if (!user) {
+      console.log('认证中间件 - 用户不存在');
       return res.status(401).json({ 
         success: false, 
         message: '无效的认证令牌' 
       });
     }
     
-    // 将用户信息附加到请求对象
-    req.user = admin;
+    // 将用户信息和token添加到请求对象
+    req.user = user;
     req.token = token;
     
+    // 继续处理请求
     next();
   } catch (error) {
     console.error('认证中间件错误:', error);
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false, 
-        message: '认证令牌已过期' 
-      });
-    }
     
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ 
@@ -53,13 +64,18 @@ const authenticate = async (req, res, next) => {
       });
     }
     
-    res.status(500).json({ 
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        success: false, 
+        message: '认证令牌已过期' 
+      });
+    }
+    
+    res.status(401).json({ 
       success: false, 
-      message: '服务器错误' 
+      message: '认证失败' 
     });
   }
 };
 
-module.exports = {
-  authenticate
-}; 
+module.exports = { authenticate }; 

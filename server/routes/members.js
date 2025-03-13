@@ -9,7 +9,7 @@ const {
 } = require('../controllers/memberController');
 const { authenticate } = require('../middleware/auth');
 
-// 所有会员路由都需要认证
+// 应用认证中间件到所有会员路由
 router.use(authenticate);
 
 // 获取所有会员
