@@ -130,26 +130,61 @@
 
 ## 项目结构
 
+### 前端 (client)
+
 ```
-会员积分系统/
-├── client/                 # 前端React应用
-│   ├── public/             # 静态资源
-│   │   ├── components/     # 组件
-│   │   ├── pages/          # 页面
-│   │   ├── services/       # API服务
-│   │   ├── context/        # React上下文
-│   │   └── App.js          # 主应用组件
-│   └── package.json        # 前端依赖
-│
-├── server/                 # 后端Node.js应用
-│   ├── controllers/        # 控制器
-│   ├── middleware/         # 中间件
-│   ├── routes/             # 路由
+client/
+├── public/                 # 静态资源
+├── src/                    # 源代码
+│   ├── components/         # 通用组件
+│   │   ├── AppHeader.js    # 应用头部组件
+│   │   ├── AppSidebar.js   # 侧边栏组件
+│   │   ├── MemberForm.js   # 会员表单组件
+│   │   └── ...
+│   ├── contexts/           # React上下文
+│   │   └── AuthContext.js  # 认证上下文
+│   ├── pages/              # 页面组件
+│   │   ├── Login.js        # 登录页面
+│   │   ├── Members.js      # 会员管理页面
+│   │   ├── MemberDetail.js # 会员详情页面
+│   │   ├── Points.js       # 积分管理页面
+│   │   ├── Ranking.js      # 积分排行页面
+│   │   └── ...
+│   ├── services/           # 服务
+│   │   └── api.js          # API请求服务
 │   ├── utils/              # 工具函数
+│   │   └── helpers.js      # 辅助函数
+│   ├── App.js              # 应用主组件
 │   ├── index.js            # 入口文件
-│   └── package.json        # 后端依赖
-│
-└── README.md               # 项目文档
+│   └── ...
+├── package.json            # 项目依赖
+└── ...
+```
+
+### 后端 (server)
+
+```
+server/
+├── controllers/            # 控制器
+│   ├── authController.js   # 认证控制器
+│   ├── memberController.js # 会员管理控制器
+│   ├── pointsController.js # 积分管理控制器
+│   └── ...
+├── middleware/             # 中间件
+│   ├── auth.js             # 认证中间件
+│   └── ...
+├── routes/                 # 路由
+│   ├── auth.js             # 认证路由
+│   ├── members.js          # 会员管理路由
+│   ├── points.js           # 积分管理路由
+│   └── ...
+├── utils/                  # 工具函数
+│   ├── db.js               # 数据库操作
+│   ├── initDb.js           # 数据库初始化
+│   ├── resetDb.js          # 数据库重置
+│   └── ...
+├── index.js                # 服务器入口文件
+└── package.json            # 项目依赖
 ```
 
 ## 常见问题
