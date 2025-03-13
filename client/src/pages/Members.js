@@ -39,6 +39,8 @@ const Members = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [currentMember, setCurrentMember] = useState(null);
+  const [modalMode, setModalMode] = useState('create');
+  const [modalVisible, setModalVisible] = useState(false);
 
   // 获取会员列表
   const fetchMembers = async (page = 1, pageSize = 10, searchTerm = '') => {
@@ -105,20 +107,24 @@ const Members = () => {
   // 处理编辑会员
   const handleEdit = (member) => {
     setCurrentMember(member);
-    setEditModalVisible(true);
+    setModalMode('edit');
+    setModalVisible(true);
   };
 
-  // 处理创建成功
-  const handleCreateSuccess = () => {
-    setCreateModalVisible(false);
-    fetchMembers(1, pagination.pageSize, search);
+  // 检查会员创建成功后的处理函数
+  const handleMemberCreated = (newMember) => {
+    console.log('会员创建/更新成功，刷新列表', newMember);
+    // 立即刷新会员列表
+    fetchMembers();
+    // 关闭弹窗
+    setModalVisible(false);
   };
 
-  // 处理编辑成功
-  const handleEditSuccess = () => {
-    setEditModalVisible(false);
+  // 检查弹窗关闭函数
+  const handleModalClose = () => {
+    setModalVisible(false);
     setCurrentMember(null);
-    fetchMembers(pagination.current, pagination.pageSize, search);
+    setModalMode('create');
   };
 
   // 表格列
@@ -215,7 +221,10 @@ const Members = () => {
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
-              onClick={() => setCreateModalVisible(true)}
+              onClick={() => {
+                setModalMode('create');
+                setModalVisible(true);
+              }}
             >
               新增会员
             </Button>
@@ -234,36 +243,18 @@ const Members = () => {
 
       {/* 新增会员弹窗 */}
       <Modal
-        title="新增会员"
-        visible={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
+        title={modalMode === 'create' ? '创建新会员' : '编辑会员信息'}
+        open={modalVisible}
+        onCancel={handleModalClose}
         footer={null}
-        width={600}
+        destroyOnClose
       >
         <MemberForm 
-          mode="create" 
-          onSuccess={handleCreateSuccess} 
+          mode={modalMode} 
+          member={currentMember} 
+          onSuccess={handleMemberCreated}
+          onClose={handleModalClose}
         />
-      </Modal>
-
-      {/* 编辑会员弹窗 */}
-      <Modal
-        title="编辑会员"
-        visible={editModalVisible}
-        onCancel={() => {
-          setEditModalVisible(false);
-          setCurrentMember(null);
-        }}
-        footer={null}
-        width={600}
-      >
-        {currentMember && (
-          <MemberForm 
-            mode="edit" 
-            member={currentMember} 
-            onSuccess={handleEditSuccess} 
-          />
-        )}
       </Modal>
     </div>
   );

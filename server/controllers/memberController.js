@@ -95,7 +95,9 @@ const getMemberById = async (req, res) => {
 // 创建会员
 const createMember = async (req, res) => {
   try {
-    const { nickname, planetId } = req.body;
+    const { nickname, planetId, initialPoints, description } = req.body;
+    
+    console.log('创建会员请求数据:', req.body);
     
     // 验证必填字段
     if (!nickname) {
@@ -105,51 +107,100 @@ const createMember = async (req, res) => {
       });
     }
     
-    // 检查星球ID是否已存在
+    // 确保initialPoints是数字类型
+    const points = initialPoints !== undefined && initialPoints !== null 
+      ? parseInt(initialPoints) 
+      : 0;
+    
+    console.log('初始积分:', points);
+    
+    // 检查是否已存在相同星球ID的会员
     if (planetId) {
-      const existingMember = await getOne('SELECT * FROM members WHERE planetId = ?', [planetId]);
+      const existingMember = await getOne(
+        'SELECT * FROM members WHERE planetId = ?',
+        [planetId]
+      );
+      
       if (existingMember) {
         return res.status(400).json({
           success: false,
-          message: '该星球ID已被使用'
+          message: '已存在相同星球ID的会员'
         });
       }
     }
     
-    // 创建会员
-    const result = await runQuery(
-      'INSERT INTO members (nickname, planetId, created_at) VALUES (?, ?, datetime("now", "localtime"))',
-      [nickname, planetId]
-    );
+    // 开始事务
+    await runQuery('BEGIN TRANSACTION');
     
-    const memberId = result.lastID;
-    
-    // 创建积分账户
-    await runQuery(
-      'INSERT INTO points_accounts (member_id, points, created_at) VALUES (?, ?, datetime("now", "localtime"))',
-      [memberId, 0]
-    );
-    
-    // 获取创建的会员信息
-    const member = await getOne(`
-      SELECT m.*, COALESCE(pa.points, 0) as points 
-      FROM members m
-      LEFT JOIN points_accounts pa ON m.id = pa.member_id
-      WHERE m.id = ?
-    `, [memberId]);
-    
-    res.status(201).json({
-      success: true,
-      data: {
-        member
-      },
-      message: '会员创建成功'
-    });
+    try {
+      console.log('创建会员记录...');
+      
+      // 创建会员记录
+      const insertResult = await runQuery(
+        'INSERT INTO members (nickname, planetId, created_at) VALUES (?, ?, datetime("now", "localtime"))',
+        [nickname, planetId]
+      );
+      
+      // 获取新创建会员的ID
+      const memberId = insertResult.lastID;
+      
+      console.log('新创建会员ID:', memberId);
+      
+      if (!memberId) {
+        throw new Error('创建会员失败，无法获取会员ID');
+      }
+      
+      // 创建积分账户
+      console.log('创建积分账户，会员ID:', memberId, '初始积分:', points);
+      
+      await runQuery(
+        'INSERT INTO points_accounts (member_id, points, created_at) VALUES (?, ?, datetime("now", "localtime"))',
+        [memberId, points]
+      );
+      
+      // 如果有初始积分，创建积分交易记录
+      if (points > 0) {
+        console.log('创建初始积分交易记录，积分:', points);
+        await runQuery(
+          'INSERT INTO points_transactions (member_id, type, points, description, created_at) VALUES (?, ?, ?, ?, datetime("now", "localtime"))',
+          [memberId, 'add', points, description || '初始积分']
+        );
+      }
+      
+      // 提交事务
+      await runQuery('COMMIT');
+      
+      // 获取创建的会员信息
+      const member = await getOne(
+        `SELECT m.*, COALESCE(pa.points, 0) as points 
+         FROM members m 
+         LEFT JOIN points_accounts pa ON m.id = pa.member_id 
+         WHERE m.id = ?`,
+        [memberId]
+      );
+      
+      console.log('创建的会员信息:', member);
+      
+      // 确保返回的会员对象包含积分
+      if (member && !member.hasOwnProperty('points')) {
+        member.points = points;
+      }
+      
+      res.status(201).json({
+        success: true,
+        message: '会员创建成功',
+        data: member
+      });
+    } catch (error) {
+      // 回滚事务
+      await runQuery('ROLLBACK');
+      throw error;
+    }
   } catch (error) {
     console.error('创建会员时出错:', error);
     res.status(500).json({
       success: false,
-      message: '创建会员失败'
+      message: '创建会员失败: ' + error.message
     });
   }
 };

@@ -3,7 +3,7 @@ import { Form, Input, Button, message, InputNumber, Radio, Space } from 'antd';
 import { UserOutlined, IdcardOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import api from '../services/api';
 
-const MemberForm = ({ member, onSuccess, mode = 'create' }) => {
+const MemberForm = ({ member, onSuccess, onClose, mode = 'create' }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [pointsOperation, setPointsOperation] = useState('none');
@@ -22,23 +22,38 @@ const MemberForm = ({ member, onSuccess, mode = 'create' }) => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
+      console.log('提交表单数据:', values);
+      
       let response;
-      let pointsResponse;
       
       if (mode === 'create') {
-        // 创建会员
+        // 创建会员时直接包含初始积分
         response = await api.post('/members', {
           nickname: values.nickname,
-          planetId: values.planetId
+          planetId: values.planetId,
+          initialPoints: values.initialPoints || 0,
+          description: values.initialPointsDescription || '初始积分设置'
         });
         
-        // 如果设置了初始积分，则添加积分
-        if (values.initialPoints && values.initialPoints > 0) {
-          pointsResponse = await api.post('/points/add', {
-            memberId: response.data.data.member.id,
-            points: values.initialPoints,
-            description: values.initialPointsDescription || '初始积分设置'
-          });
+        console.log('创建会员响应:', response.data);
+        
+        if (response.data && response.data.success) {
+          message.success('会员创建成功！');
+          
+          // 重置表单
+          form.resetFields();
+          
+          // 关闭弹窗
+          if (onClose) {
+            onClose();
+          }
+          
+          // 回调刷新列表
+          if (onSuccess) {
+            onSuccess(response.data.data);
+          }
+        } else {
+          throw new Error(response.data?.message || '创建失败，请重试');
         }
       } else {
         // 更新会员信息
@@ -47,41 +62,64 @@ const MemberForm = ({ member, onSuccess, mode = 'create' }) => {
           planetId: values.planetId
         });
         
-        // 处理积分操作
-        if (pointsOperation === 'add' && pointsAmount > 0) {
-          pointsResponse = await api.post('/points/add', {
-            memberId: member.id,
-            points: pointsAmount,
-            description: pointsDescription || '手动增加积分'
-          });
-        } else if (pointsOperation === 'deduct' && pointsAmount > 0) {
-          pointsResponse = await api.post('/points/deduct', {
-            memberId: member.id,
-            points: pointsAmount,
-            description: pointsDescription || '手动抵扣积分'
-          });
+        console.log('更新会员响应:', response.data);
+        
+        if (response.data && response.data.success) {
+          message.success('会员信息更新成功！');
+          
+          // 处理积分操作
+          if (pointsOperation === 'add' && pointsAmount > 0) {
+            const pointsResponse = await api.post('/points/add', {
+              memberId: member.id,
+              points: pointsAmount,
+              description: pointsDescription || '手动增加积分'
+            });
+            
+            if (pointsResponse.data && pointsResponse.data.success) {
+              message.success('积分增加成功！');
+            }
+          } else if (pointsOperation === 'deduct' && pointsAmount > 0) {
+            const pointsResponse = await api.post('/points/deduct', {
+              memberId: member.id,
+              points: pointsAmount,
+              description: pointsDescription || '手动抵扣积分'
+            });
+            
+            if (pointsResponse.data && pointsResponse.data.success) {
+              message.success('积分抵扣成功！');
+            }
+          }
+          
+          // 重置表单
+          form.resetFields();
+          setPointsOperation('none');
+          setPointsAmount(0);
+          setPointsDescription('');
+          
+          // 关闭弹窗
+          if (onClose) {
+            onClose();
+          }
+          
+          // 回调刷新列表
+          if (onSuccess) {
+            onSuccess(response.data.data.member || response.data.data);
+          }
+        } else {
+          throw new Error(response.data?.message || '更新失败，请重试');
         }
-      }
-
-      message.success(mode === 'create' ? '会员创建成功！' : '会员信息更新成功！');
-      
-      if (pointsResponse) {
-        message.success(pointsOperation === 'add' ? '积分增加成功！' : '积分抵扣成功！');
-      }
-      
-      // 重置表单
-      form.resetFields();
-      setPointsOperation('none');
-      setPointsAmount(0);
-      setPointsDescription('');
-      
-      // 回调
-      if (onSuccess) {
-        onSuccess(response.data.data.member);
       }
     } catch (error) {
       console.error('提交表单时出错:', error);
-      message.error(error.response?.data?.message || '操作失败，请重试');
+      let errorMessage = '操作失败，请重试';
+      
+      if (error.response && error.response.data) {
+        errorMessage = error.response.data.message || errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
