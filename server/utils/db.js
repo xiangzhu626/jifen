@@ -45,28 +45,45 @@ const getOne = (sql, params = []) => {
 // 执行SQL查询
 const runQuery = (sql, params = []) => {
   return new Promise((resolve, reject) => {
-    // 使用已经创建的db实例，而不是调用不存在的getDb函数
-    
     // 添加日志，帮助调试
     console.log('执行SQL查询:', sql);
     console.log('查询参数:', params);
     
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        console.error('SQL查询错误:', err);
-        reject(err);
-        return;
-      }
-      
-      // 确保返回的是数组
-      if (!Array.isArray(rows)) {
-        console.warn('SQL查询返回的不是数组，转换为数组');
-        rows = rows ? [rows] : [];
-      }
-      
-      console.log('SQL查询结果行数:', rows.length);
-      resolve(rows);
-    });
+    // 判断SQL类型
+    const sqlType = sql.trim().toUpperCase().split(' ')[0];
+    
+    // 对于SELECT查询，使用db.all
+    if (sqlType === 'SELECT') {
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          console.error('SQL查询错误:', err);
+          reject(err);
+          return;
+        }
+        
+        console.log('SQL查询结果行数:', rows.length);
+        resolve(rows);
+      });
+    } 
+    // 对于INSERT, UPDATE, DELETE等修改操作，使用db.run
+    else {
+      db.run(sql, params, function(err) {
+        if (err) {
+          console.error('SQL执行错误:', err);
+          reject(err);
+          return;
+        }
+        
+        // 返回包含lastID和changes的对象
+        const result = {
+          lastID: this.lastID,
+          changes: this.changes
+        };
+        
+        console.log('SQL执行结果:', result);
+        resolve(result);
+      });
+    }
   });
 };
 
@@ -133,11 +150,14 @@ const initDb = async () => {
       console.log('未找到管理员账户，创建默认管理员...');
       const bcrypt = require('bcryptjs');
       const hashedPassword = await bcrypt.hash('admin123', 10);
-      await runQuery(
+      
+      // 使用修改后的runQuery，确保能获取lastID
+      const adminResult = await runQuery(
         'INSERT INTO admins (username, password, created_at) VALUES (?, ?, datetime("now", "localtime"))',
         ['admin', hashedPassword]
       );
-      console.log('已创建管理员账户: admin / admin123');
+      
+      console.log('已创建管理员账户: admin / admin123', '管理员ID:', adminResult.lastID);
     }
     
     // 检查是否已有会员数据
@@ -158,17 +178,19 @@ const initDb = async () => {
       
       for (const member of testMembers) {
         // 插入会员
-        const result = await runQuery(
+        const memberResult = await runQuery(
           'INSERT INTO members (nickname, planetId, created_at) VALUES (?, ?, datetime("now", "localtime"))',
           [member.nickname, member.planetId]
         );
         
-        const memberId = result.lastID;
+        const memberId = memberResult.lastID;
+        console.log(`创建测试会员: ${member.nickname}, ID: ${memberId}`);
         
         // 创建积分账户
+        const initialPoints = Math.floor(Math.random() * 1000);
         await runQuery(
           'INSERT INTO points_accounts (member_id, points, created_at) VALUES (?, ?, datetime("now", "localtime"))',
-          [memberId, Math.floor(Math.random() * 1000)]
+          [memberId, initialPoints]
         );
         
         // 添加一些积分交易记录
