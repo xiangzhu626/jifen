@@ -64,7 +64,7 @@ const AppSidebar = () => {
           {
             key: 'points',
             icon: <GiftOutlined />,
-            label: '积分管理',
+            label: '积分交易记录',
             onClick: () => navigate('/points')
           },
           {
