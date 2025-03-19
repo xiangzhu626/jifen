@@ -128,6 +128,62 @@
    - 默认管理员账号: admin
    - 默认密码: admin123
 
+7. **重启操作说明**
+
+   a. 重启整个应用（前端和后端）：
+   ```bash
+   # 停止当前运行的进程
+   pkill -f "node server/index.js"  # 停止后端服务
+   pkill -f "react-scripts start"   # 停止前端服务
+
+   # 重新启动应用
+   npm run dev  # 开发模式，同时启动前端和后端
+   ```
+
+   b. 只重启后端服务：
+   ```bash
+   pkill -f "node server/index.js"
+   npm run server
+   ```
+
+   c. 只重启前端服务：
+   ```bash
+   pkill -f "react-scripts start"
+   cd client && npm start
+   ```
+
+   d. 使用PM2管理进程（推荐生产环境使用）：
+   ```bash
+   # 安装PM2
+   npm install -g pm2
+
+   # 使用PM2重启服务
+   pm2 restart all          # 重启所有应用
+   pm2 restart server       # 只重启后端
+   pm2 restart client       # 只重启前端
+
+   # 查看应用状态
+   pm2 status
+   ```
+
+   e. 常见问题处理：
+   ```bash
+   # 查找占用端口的进程
+   lsof -i :3000  # 前端端口
+   lsof -i :5000  # 后端端口
+
+   # 杀死占用端口的进程
+   kill -9 <进程ID>
+
+   # 清理Node缓存（如果重启后仍有问题）
+   npm cache clean --force
+
+   # 重新安装依赖
+   rm -rf node_modules
+   rm -rf client/node_modules
+   npm run install-all
+   ```
+
 ## 项目结构
 
 ### 前端 (client)
