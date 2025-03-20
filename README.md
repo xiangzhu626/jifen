@@ -260,6 +260,90 @@ npm run reset-db
 ### 跨域问题
 如果遇到跨域问题，请确保后端CORS设置正确，检查`server/index.js`中的CORS配置。
 
+### 数据库备份
+SQLite数据库文件位于`server/database.sqlite`，可以通过以下方式备份：
+
+1. **手动备份**
+   ```bash
+   # 停止服务器
+   pkill -f "node server/index.js"
+   
+   # 复制数据库文件
+   cp server/database.sqlite server/database.sqlite.backup-$(date +%Y%m%d)
+   
+   # 重启服务器
+   npm run server
+   ```
+
+2. **自动备份脚本**
+   创建`backup.sh`文件：
+   ```bash
+   #!/bin/bash
+   
+   # 备份目录
+   BACKUP_DIR="server/backups"
+   
+   # 创建备份目录
+   mkdir -p $BACKUP_DIR
+   
+   # 生成备份文件名
+   BACKUP_FILE="$BACKUP_DIR/database-$(date +%Y%m%d-%H%M%S).sqlite"
+   
+   # 复制数据库文件
+   cp server/database.sqlite "$BACKUP_FILE"
+   
+   # 只保留最近30天的备份
+   find $BACKUP_DIR -name "database-*.sqlite" -mtime +30 -delete
+   ```
+
+   设置定时任务：
+   ```bash
+   # 编辑crontab
+   crontab -e
+   
+   # 添加每日凌晨2点备份
+   0 2 * * * /bin/bash /path/to/backup.sh
+   ```
+
+### 管理员密码修改
+
+1. **通过API修改（推荐）**
+   ```bash
+   # 登录后在系统中修改密码
+   curl -X POST http://localhost:3001/api/auth/change-password \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer <你的JWT令牌>" \
+     -d '{"currentPassword": "当前密码", "newPassword": "新密码"}'
+   ```
+
+2. **直接修改数据库（应急方案）**
+   ```bash
+   # 1. 停止服务器
+   pkill -f "node server/index.js"
+   
+   # 2. 使用SQLite命令行工具
+   sqlite3 server/database.sqlite
+   
+   # 3. 更新密码（新密码为 'admin123'）
+   # 注意：密码需要使用bcrypt加密，建议通过API修改
+   UPDATE admins SET password = '$2a$10$新的加密密码' WHERE username = 'admin';
+   
+   # 4. 退出SQLite
+   .quit
+   
+   # 5. 重启服务器
+   npm run server
+   ```
+
+注意事项：
+- 定期备份数据库文件
+- 修改密码后请立即记录新密码
+- 建议使用强密码（包含大小写字母、数字和特殊字符）
+- 如果忘记密码，可以使用数据库重置命令，但会清空所有数据：
+  ```bash
+  npm run reset-db
+  ```
+
 ## 开发指南
 
 ### 添加新功能
