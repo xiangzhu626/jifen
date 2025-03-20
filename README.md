@@ -344,6 +344,79 @@ SQLite数据库文件位于`server/database.sqlite`，可以通过以下方式�
   npm run reset-db
   ```
 
+### 域名配置问题
+
+如果在Linux服务器上配置域名后遇到 "Invalid Host header" 错误，有以下几种解决方案：
+
+1. **开发环境解决方案**
+   
+   在 `client/package.json` 中修改 start 脚本，添加 HOST 环境变量：
+   ```json
+   {
+     "scripts": {
+       "start": "HOST=你的域名 react-scripts start"
+     }
+   }
+   ```
+
+2. **生产环境解决方案（推荐）**
+
+   a. 构建前端代码：
+   ```bash
+   cd client
+   npm run build
+   ```
+
+   b. 使用 Nginx 配置：
+   ```nginx
+   server {
+       listen 80;
+       server_name 你的域名;
+
+       location / {
+           root /path/to/client/build;
+           try_files $uri $uri/ /index.html;
+           index index.html;
+       }
+
+       location /api {
+           proxy_pass http://localhost:3001;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_cache_bypass $http_upgrade;
+       }
+   }
+   ```
+
+3. **如果使用开发服务器**
+
+   在 `client/src/setupProxy.js` 文件中添加配置：
+   ```javascript
+   module.exports = function(app) {
+     app.use((req, res, next) => {
+       res.header('Access-Control-Allow-Origin', '你的域名');
+       next();
+     });
+   };
+   ```
+
+4. **环境变量配置**
+
+   创建 `client/.env` 文件：
+   ```
+   HOST=你的域名
+   DANGEROUSLY_DISABLE_HOST_CHECK=true  # 仅开发环境使用
+   ```
+
+注意事项：
+- 生产环境建议使用方案2，通过 Nginx 代理来处理请求
+- 开发环境可以使用方案1或方案4
+- `DANGEROUSLY_DISABLE_HOST_CHECK=true` 仅建议在开发环境使用，生产环境不要使用此配置
+- 确保域名已正确解析到服务器IP
+- 如果使用HTTPS，需要在Nginx中配置SSL证书
+
 ## 开发指南
 
 ### 添加新功能
